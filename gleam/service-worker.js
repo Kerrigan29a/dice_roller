@@ -1,9 +1,10 @@
 const scope = new URL(self.registration.scope);
+const assets = new URL('../assets/', scope);
 const cachePrefix = `dice-roller:${scope.pathname}:`;
-const cacheName = cachePrefix + "c49ba114c6b829bd16d75cab032d48b9e7b4db25f96344f36179e1014ea9cc89";
-const precache = new Set(["android-chrome-192x192.png", "android-chrome-512x512.png", "app.js", "apple-touch-icon.png", "brand-die.png", "dm-sans-OFL.txt", "dm-sans.woff2", "favicon-16x16.png", "favicon-32x32.png", "favicon.ico", "ibm-plex-mono-OFL.txt", "ibm-plex-mono-medium.woff2", "ibm-plex-mono-regular.woff2", "index.html", "instrument-sans-OFL.txt", "instrument-sans.woff2", "inter-OFL.txt", "inter.woff2", "manifest.json", "style.css", "icons/icons.json", "offline-icons.json"].map((path) => new URL(path, scope).href));
+const cacheName = cachePrefix + "8b2f3d93eb1892d0b7c75f3ba5b38b94d569ba3fc61cf9a1e03fa046ffbb8da2";
+const precache = new Set(["index.html", "manifest.json", "app.js", "../assets/android-chrome-192x192.png", "../assets/android-chrome-512x512.png", "../assets/apple-touch-icon.png", "../assets/brand-die.png", "../assets/dm-sans-OFL.txt", "../assets/dm-sans.woff2", "../assets/favicon-16x16.png", "../assets/favicon-32x32.png", "../assets/favicon.ico", "../assets/ibm-plex-mono-OFL.txt", "../assets/ibm-plex-mono-medium.woff2", "../assets/ibm-plex-mono-regular.woff2", "../assets/inter-OFL.txt", "../assets/inter.woff2", "../assets/offline-icons.json", "../assets/style.css", "../assets/icons/icons.json"].map((path) => new URL(path, scope).href));
 const indexUrl = new URL('index.html', scope).href;
-const iconPackUrl = new URL('offline-icons.json', scope).href;
+const iconPackUrl = new URL('offline-icons.json', assets).href;
 let iconPack;
 
 self.addEventListener('install', (event) => {
@@ -18,9 +19,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
     event.waitUntil((async () => {
         const names = await caches.keys();
-        await Promise.all(names.filter((name) => name !== cacheName && (
-            name.startsWith(cachePrefix) || name === 'dice-roller-v1'
-        )).map((name) => caches.delete(name)));
+        await Promise.all(names.filter((name) => name !== cacheName && name.startsWith(cachePrefix))
+            .map((name) => caches.delete(name)));
         await self.clients.claim();
     })());
 });
@@ -42,11 +42,11 @@ async function serveIcon(path, request) {
 self.addEventListener('fetch', (event) => {
     const request = event.request;
     const url = new URL(request.url);
-    if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) {
+    if (request.method !== 'GET' || url.origin !== scope.origin || (!url.pathname.startsWith(scope.pathname) && !url.pathname.startsWith(assets.pathname))) {
         return;
     }
 
-    const path = url.pathname.slice(scope.pathname.length);
+    const path = url.pathname.startsWith(assets.pathname) ? url.pathname.slice(assets.pathname.length) : url.pathname.slice(scope.pathname.length);
     if (request.mode === 'navigate' && (path === '' || path === 'index.html')) {
         // Shared state lives in the query string and uses the same app shell.
         event.respondWith(cachedAsset(indexUrl).then((response) => response || fetch(request)));
