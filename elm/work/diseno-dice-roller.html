@@ -1,0 +1,371 @@
+<div id="dice-layout-preview">
+  <div class="preview-choice" role="group" aria-label="Ancho de la vista">
+    <button type="button" data-width="desktop" aria-pressed="true">Escritorio</button>
+    <button type="button" data-width="phone" aria-pressed="false">Móvil</button>
+  </div>
+  <div class="preview-frame" data-width="desktop">
+    <div class="roller">
+      <header class="bar">
+        <strong>Dice Roller</strong>
+        <button type="button" data-share>Compartir</button>
+      </header>
+      <div class="workspace">
+        <main class="workspace-main">
+          <div class="modes" role="group" aria-label="Herramienta">
+            <button type="button" data-mode="dice" aria-pressed="true">Dados</button>
+            <button type="button" data-mode="words" aria-pressed="false">Palabras</button>
+            <button type="button" data-mode="icons" aria-pressed="false">Iconos</button>
+          </div>
+          <form class="tool">
+            <div data-panel="dice">
+              <fieldset class="presets">
+                <legend>Dado</legend>
+                <div class="choices">
+                  <button type="button" data-sides="4" aria-pressed="false">d4</button>
+                  <button type="button" data-sides="6" aria-pressed="false">d6</button>
+                  <button type="button" data-sides="8" aria-pressed="false">d8</button>
+                  <button type="button" data-sides="10" aria-pressed="false">d10</button>
+                  <button type="button" data-sides="12" aria-pressed="false">d12</button>
+                  <button type="button" data-sides="20" aria-pressed="true">d20</button>
+                  <button type="button" data-sides="100" aria-pressed="false">d100</button>
+                  <button type="button" data-custom aria-expanded="false">Otro</button>
+                </div>
+              </fieldset>
+              <div class="inputs">
+                <label>Cantidad <input name="amount" inputmode="numeric" value="1" size="3"></label>
+                <label data-custom-field hidden>Caras <input name="sides" inputmode="numeric" value="20" size="4"></label>
+                <label class="check"><input name="explode" type="checkbox"> Explosivos</label>
+              </div>
+            </div>
+            <div data-panel="words" hidden>
+              <div class="choices">
+                <strong class="selected-table">Acciones</strong>
+                <button type="button" data-table-picker aria-expanded="false" aria-controls="dr-table-picker">Cambiar tabla</button>
+              </div>
+              <div id="dr-table-picker" hidden>
+                <label>Buscar tabla <input name="table-filter" type="search" autocomplete="off"></label>
+                <div class="choices tables" role="group" aria-label="Tablas de Mythic 2e"></div>
+              </div>
+            </div>
+            <div data-panel="icons" hidden>
+              <label>Cantidad de iconos <input name="icons" inputmode="numeric" value="3" size="3"></label>
+            </div>
+            <p class="validation" role="alert" hidden></p>
+            <button class="primary" type="button" data-run>Tirar 1d20</button>
+          </form>
+          <section class="result" aria-labelledby="dr-result-title">
+            <h2 id="dr-result-title">Último resultado</h2>
+            <div class="result-content" aria-live="polite" aria-atomic="true">
+              <p class="result-value">17</p>
+              <p class="result-detail">1d20</p>
+            </div>
+          </section>
+        </main>
+        <aside class="history" aria-labelledby="dr-history-title">
+          <h2 id="dr-history-title">Historial</h2>
+          <ol class="history-list"></ol>
+          <button class="show-history" type="button" aria-expanded="false" hidden>Ver historial completo</button>
+        </aside>
+      </div>
+      <dialog class="sharing" aria-labelledby="dr-share-title">
+        <div class="dialog-body">
+          <h2 id="dr-share-title">Compartir sesión</h2>
+          <p class="share-count"></p>
+          <div class="dialog-actions">
+            <button type="button" data-close>Cerrar</button>
+            <button class="primary" type="button" data-copy>Copiar enlace</button>
+          </div>
+          <p class="copy-status" role="status"></p>
+        </div>
+      </dialog>
+    </div>
+  </div>
+</div>
+
+<style>
+  #dice-layout-preview { color-scheme: light dark; font: 15px/1.45 Inter, system-ui, sans-serif; }
+  #dice-layout-preview .preview-choice { display: flex; gap: 6px; margin-block-end: 12px; }
+  #dice-layout-preview .preview-frame { container-type: inline-size; margin-inline: auto; }
+  #dice-layout-preview .preview-frame[data-width="phone"] { max-width: 390px; }
+  #dice-layout-preview .roller {
+    --dr-canvas: light-dark(#f5f6fa, #111420);
+    --dr-paper: light-dark(#fff, #1a1f2d);
+    --dr-ink: light-dark(#182235, #eef1f7);
+    --dr-muted: light-dark(#525d71, #b1bacb);
+    --dr-line: light-dark(#dbe0eb, #394355);
+    --dr-accent: light-dark(#254ecf, #afc0ff);
+    --dr-on-accent: light-dark(#fff, #151d36);
+    --dr-tint: light-dark(#e9eeff, #303b60);
+    background: var(--dr-canvas); color: var(--dr-ink); border: 1px solid var(--dr-line); border-radius: 14px;
+  }
+  #dice-layout-preview *, #dice-layout-preview *::before, #dice-layout-preview *::after { box-sizing: border-box; }
+  #dice-layout-preview [hidden] { display: none !important; }
+  #dice-layout-preview h2, #dice-layout-preview p { margin: 0; }
+  #dice-layout-preview h2 { font-size: 1rem; font-weight: 650; }
+  #dice-layout-preview button, #dice-layout-preview input { font: inherit; }
+  #dice-layout-preview button {
+    min-height: 44px; padding: 6px 10px; color: var(--dr-ink, inherit);
+    background: var(--dr-paper, transparent); border: 1px solid var(--dr-line, currentColor); border-radius: 7px;
+  }
+  #dice-layout-preview button[aria-pressed="true"] { color: var(--dr-accent, inherit); background: var(--dr-tint, transparent); border-color: currentColor; font-weight: 650; }
+  #dice-layout-preview button:focus-visible, #dice-layout-preview input:focus-visible { outline: 2px solid var(--dr-accent, currentColor); outline-offset: 2px; }
+  #dice-layout-preview .primary { color: var(--dr-on-accent); background: var(--dr-accent); border-color: var(--dr-accent); font-weight: 650; }
+  #dice-layout-preview .bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; gap: 8px; border-bottom: 1px solid var(--dr-line); }
+  #dice-layout-preview .bar strong { font-size: 1.15rem; }
+  #dice-layout-preview .workspace { display: grid; gap: 12px; padding: 12px; }
+  #dice-layout-preview .workspace-main { min-width: 0; display: grid; gap: 10px; }
+  #dice-layout-preview .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  #dice-layout-preview .modes button { padding-inline: 6px; }
+  #dice-layout-preview .tool, #dice-layout-preview .result, #dice-layout-preview .history {
+    background: var(--dr-paper); padding: 12px; border: 1px solid var(--dr-line); border-radius: 10px; min-width: 0;
+  }
+  #dice-layout-preview .tool { display: grid; gap: 10px; }
+  #dice-layout-preview .presets { padding: 0; margin: 0; border: 0; min-width: 0; }
+  #dice-layout-preview legend { padding: 0; margin-block-end: 5px; }
+  #dice-layout-preview .choices, #dice-layout-preview .inputs, #dice-layout-preview .dialog-actions {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  #dice-layout-preview .choices button { min-width: 44px; padding-inline: 7px; }
+  #dice-layout-preview .inputs { margin-block-start: 8px; gap: 8px 13px; }
+  #dice-layout-preview .tool label { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 44px; }
+  #dice-layout-preview .tool input:not([type="checkbox"]) {
+    min-height: 44px; max-width: 100%; padding: 5px 8px; border: 1px solid var(--dr-line);
+    border-radius: 6px; background: var(--dr-canvas); color: var(--dr-ink); font-size: 16px;
+  }
+  #dice-layout-preview .tool input[inputmode="numeric"] { width: 4rem; }
+  #dice-layout-preview .tables { margin-block-start: 6px; }
+  #dice-layout-preview .validation { color: light-dark(#a11b26, #ffb0b8); }
+  #dice-layout-preview .result-content { display: grid; gap: 2px; }
+  #dice-layout-preview .result-value { font-size: clamp(1.55rem, 5cqw, 2.2rem); font-weight: 690; overflow-wrap: anywhere; }
+  #dice-layout-preview .result-detail, #dice-layout-preview .row-detail { color: var(--dr-muted); font-size: .85rem; }
+  #dice-layout-preview .history-list { list-style: none; margin: 5px 0 0; padding: 0; }
+  #dice-layout-preview .history-list li {
+    border-bottom: 1px solid var(--dr-line); display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; gap: 8px; padding-block: 6px;
+  }
+  #dice-layout-preview .history-list li:last-child { border-bottom: 0; }
+  #dice-layout-preview .row-value { overflow-wrap: anywhere; font-weight: 650; }
+  #dice-layout-preview .show-history { margin-block-start: 6px; }
+  #dice-layout-preview .sharing {
+    width: min(90%, 360px); background: var(--dr-paper); color: var(--dr-ink);
+    border: 1px solid var(--dr-line); border-radius: 10px; padding: 16px;
+  }
+  #dice-layout-preview .dialog-body { display: grid; gap: 8px; }
+  #dice-layout-preview .sharing::backdrop { background: light-dark(#18223566, #0009); }
+  @container (min-width: 680px) {
+    #dice-layout-preview .workspace { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); align-items: start; }
+    #dice-layout-preview .tool .primary { justify-self: start; }
+  }
+</style>
+
+<script>
+  (() => {
+    const root = document.getElementById('dice-layout-preview');
+    const frame = root.querySelector('.preview-frame');
+    const form = root.querySelector('.tool');
+    const fields = form.elements;
+    const dialog = root.querySelector('.sharing');
+    const tableData = {
+      'Acciones': ['Inspeccionar a alguien', 'Descubrir un secreto', 'Proteger un objeto'],
+      'Descripciones': ['Extrañamente familiar', 'Brillante y frágil', 'Antiguo y silencioso'],
+      'Giros de trama': ['Un aliado cambia de bando', 'Aparece una deuda olvidada'],
+      'Personajes': ['Viajero reservado', 'Mensajera inquieta'],
+      'Criaturas': ['Criatura nocturna', 'Guardián del bosque'],
+      'Lugares': ['Paso de montaña', 'Torre abandonada'],
+      'Objetos': ['Llave de hierro', 'Carta sellada']
+    };
+    const symbols = [['⚿', 'Llave'], ['✦', 'Estrella'], ['☾', 'Luna'], ['♜', 'Torre'], ['☂', 'Paraguas'], ['♧', 'Trébol']];
+    let mode = 'dice';
+    let table = 'Acciones';
+    let custom = false;
+    let showAll = false;
+    const log = [
+      { mode: 'dice', amount: 1, sides: 20, explode: false, detail: '1d20', value: '17' },
+      { mode: 'words', table: 'Giros de trama', detail: 'Mythic 2e · Giros de trama', value: 'Un aliado cambia de bando' },
+      { mode: 'icons', amount: 3, detail: '3 iconos', value: [symbols[0], symbols[1], symbols[2]] }
+    ];
+    const setPressed = (selector, isSelected) => root.querySelectorAll(selector).forEach((button) => {
+      button.setAttribute('aria-pressed', String(isSelected(button)));
+    });
+    const choose = (options) => options[Math.floor(Math.random() * options.length)];
+    const readInt = (input) => /^[0-9]+$/.test(input.value) ? Number(input.value) : 0;
+    const normalise = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    function renderTables() {
+      const visible = Object.keys(tableData).filter((name) => normalise(name).includes(normalise(fields['table-filter'].value)));
+      const container = root.querySelector('.tables');
+      container.replaceChildren(...visible.map((name) => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.dataset.table = name;
+        option.textContent = name;
+        option.setAttribute('aria-pressed', String(table === name));
+        return option;
+      }));
+      if (visible.length === 0) container.textContent = 'Ninguna tabla coincide';
+    }
+
+    function renderConfig() {
+      setPressed('[data-mode]', (button) => button.dataset.mode === mode);
+      root.querySelectorAll('[data-panel]').forEach((panel) => { panel.hidden = panel.dataset.panel !== mode; });
+      setPressed('[data-sides]', (button) => !custom && button.dataset.sides === fields.sides.value);
+      root.querySelector('[data-custom]').setAttribute('aria-expanded', String(custom));
+      root.querySelector('[data-custom-field]').hidden = !custom;
+      root.querySelector('.selected-table').textContent = table;
+      form.querySelector('[data-run]').textContent = mode === 'dice'
+        ? (readInt(fields.amount) && readInt(fields.sides) ? 'Tirar ' + fields.amount.value + 'd' + fields.sides.value : 'Tirar')
+        : (mode === 'words' ? 'Consultar ' + table : 'Sacar iconos');
+    }
+
+    function writeValue(element, value) {
+      element.replaceChildren();
+      if (Array.isArray(value)) {
+        value.forEach(([symbol, label]) => {
+          const item = document.createElement('span');
+          item.setAttribute('role', 'img');
+          item.setAttribute('aria-label', label);
+          item.textContent = symbol + ' ';
+          element.append(item);
+        });
+      } else {
+        element.textContent = value;
+      }
+    }
+
+    function renderLog() {
+      writeValue(root.querySelector('.result-value'), log[0].value);
+      root.querySelector('.result-detail').textContent = log[0].detail;
+      root.querySelector('.history-list').replaceChildren(...log.slice(0, showAll ? log.length : 3).map((entry, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = '<div><p class="row-value"></p><p class="row-detail"></p></div><button type="button">Repetir</button>';
+        writeValue(li.querySelector('.row-value'), entry.value);
+        li.querySelector('.row-detail').textContent = entry.detail;
+        const repeat = li.querySelector('button');
+        repeat.dataset.repeat = index;
+        repeat.setAttribute('aria-label', 'Repetir ' + entry.detail);
+        return li;
+      }));
+      const more = root.querySelector('.show-history');
+      more.hidden = log.length <= 3;
+      more.textContent = showAll ? 'Mostrar las tres últimas' : 'Ver historial completo';
+      more.setAttribute('aria-expanded', String(showAll));
+    }
+
+    function generate(settings) {
+      let detail, value;
+      if (settings.mode === 'dice') {
+        detail = settings.amount + 'd' + settings.sides + (settings.explode ? ' · Explosivos' : '');
+        const dice = Array.from({ length: settings.amount }, () => {
+          const chain = [];
+          do {
+            chain.push(1 + Math.floor(Math.random() * settings.sides));
+          } while (settings.explode && settings.sides > 1 && chain[chain.length - 1] === settings.sides);
+          return chain.join(' + ');
+        });
+        value = dice.join('  ·  ');
+      } else if (settings.mode === 'words') {
+        detail = 'Mythic 2e · ' + settings.table;
+        value = choose(tableData[settings.table]);
+      } else {
+        detail = settings.amount + (settings.amount === 1 ? ' icono' : ' iconos');
+        value = Array.from({ length: settings.amount }, () => choose(symbols));
+      }
+      log.unshift({ ...settings, detail, value });
+      renderLog();
+    }
+
+    function remember() {
+      const host = window.openai;
+      if (host?.setWidgetState) {
+        host.setWidgetState({ modelContent: { vista: frame.dataset.width, herramienta: mode }, privateContent: null }).catch(() => {});
+      }
+    }
+    function restore(saved) {
+      if (['desktop', 'phone'].includes(saved?.vista)) frame.dataset.width = saved.vista;
+      if (['dice', 'words', 'icons'].includes(saved?.herramienta)) mode = saved.herramienta;
+      setPressed('button[data-width]', (button) => button.dataset.width === frame.dataset.width);
+      renderConfig();
+    }
+
+    form.addEventListener('input', (event) => {
+      root.querySelector('.validation').hidden = true;
+      if (event.target === fields['table-filter']) renderTables();
+      renderConfig();
+    });
+    function runTool() {
+      const amount = readInt(mode === 'dice' ? fields.amount : fields.icons);
+      const sides = readInt(fields.sides);
+      const error = root.querySelector('.validation');
+      if (mode !== 'words' && (amount < 1 || amount > 30 || (mode === 'dice' && (sides < 1 || sides > 1000)))) {
+        error.textContent = 'Escribe entre 1 y 30 resultados y, para dados, entre 1 y 1.000 caras.';
+        error.hidden = false;
+        return;
+      }
+      generate({ mode, amount, sides, explode: fields.explode.checked, table });
+    }
+    form.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && event.target.matches('input:not([type="checkbox"])')) {
+        event.preventDefault();
+        if (event.target !== fields['table-filter']) runTool();
+      }
+    });
+    root.addEventListener('click', (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      if (button.dataset.width) {
+        frame.dataset.width = button.dataset.width;
+        setPressed('button[data-width]', (choice) => choice === button);
+        remember();
+      } else if (button.dataset.mode) {
+        mode = button.dataset.mode;
+        root.querySelector('.validation').hidden = true;
+        renderConfig();
+        remember();
+      } else if (button.dataset.sides) {
+        fields.sides.value = button.dataset.sides;
+        custom = false;
+        root.querySelector('.validation').hidden = true;
+        renderConfig();
+      } else if (button.hasAttribute('data-custom')) {
+        custom = !custom;
+        renderConfig();
+        if (custom) fields.sides.focus();
+      } else if (button.hasAttribute('data-table-picker')) {
+        const picker = root.querySelector('#dr-table-picker');
+        picker.hidden = !picker.hidden;
+        button.setAttribute('aria-expanded', String(!picker.hidden));
+        if (!picker.hidden) fields['table-filter'].focus();
+      } else if (button.dataset.table) {
+        table = button.dataset.table;
+        setPressed('[data-table]', (choice) => choice.dataset.table === table);
+        root.querySelector('#dr-table-picker').hidden = true;
+        const pickerButton = root.querySelector('[data-table-picker]');
+        pickerButton.setAttribute('aria-expanded', 'false');
+        pickerButton.focus();
+        renderConfig();
+      } else if (button.hasAttribute('data-run')) {
+        runTool();
+      } else if (button.dataset.repeat !== undefined) {
+        generate(log[Number(button.dataset.repeat)]);
+        root.querySelector('.history-list button').focus({ preventScroll: true });
+      } else if (button.classList.contains('show-history')) {
+        showAll = !showAll;
+        renderLog();
+      } else if (button.hasAttribute('data-share')) {
+        root.querySelector('.share-count').textContent = log.length + ' resultados en esta sesión';
+        root.querySelector('.copy-status').textContent = '';
+        dialog.showModal();
+      } else if (button.hasAttribute('data-copy')) {
+        root.querySelector('.copy-status').textContent = 'Vista de ejemplo. El enlace se copiaría aquí.';
+      } else if (button.hasAttribute('data-close')) {
+        dialog.close();
+      }
+    });
+    renderTables();
+    renderLog();
+    restore(window.openai?.widgetState?.modelContent);
+    window.addEventListener('openai:set_globals', (event) => {
+      restore(event.detail?.globals?.widgetState?.modelContent);
+    });
+  })();
+</script>

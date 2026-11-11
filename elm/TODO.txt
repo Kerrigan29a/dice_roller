@@ -1,0 +1,1 @@
+- Clear and hide inline results when "Clear" button is clicked

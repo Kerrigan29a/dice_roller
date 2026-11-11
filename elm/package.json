@@ -1,0 +1,11 @@
+{
+  "name": "elm-pwa",
+  "private": true,
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "elm": "0.19.1-6"
+  }
+}
