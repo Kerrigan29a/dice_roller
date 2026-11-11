@@ -1,19 +1,16 @@
+PORT ?= 4178
+.PHONY: all run clean build
 all: run
 
 run: build
-	cd build && python3 -m http.server
+	python3 -m http.server $(PORT) --bind 127.0.0.1 --directory dist
 
 clean:
-	-rm -r build
+	rm -rf build dist
 
-build: build/app.wasm build/wasm_exec.js ${subst assets,build,$(wildcard assets/*)}
-	echo $^
-
-build/app.wasm: app/main.go
-	GOOS=js GOARCH=wasm go build -o $@ $<
-
-build/wasm_exec.js:
-	cp $(shell go env GOROOT)/misc/wasm/$(notdir $@) $(dir $@)
-
-build/%: assets/%
-	cp $< $@
+build:
+	rm -rf dist
+	mkdir -p dist
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o dist/app.wasm ./app
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" dist/wasm_exec.js
+	python3 build.py

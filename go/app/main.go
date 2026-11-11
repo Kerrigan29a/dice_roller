@@ -14,6 +14,9 @@ func main() {
 	restoreOutput()
 	js.Global().Set("roll", js.FuncOf(jsRoll))
 	js.Global().Set("clearOutput", js.FuncOf(jsClearOutput))
+	for _, id := range []string{"roll", "clear"} {
+		js.Global().Get("document").Call("getElementById", id).Set("disabled", false)
+	}
 	<-make(chan struct{})
 }
 

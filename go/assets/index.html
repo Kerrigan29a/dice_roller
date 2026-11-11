@@ -25,8 +25,8 @@
     <div class="footer">
       <label>Sides: <input id="sides" inputmode="numeric" pattern="[0-9]*" type="text" value="6"/></label>
       <label>Amount: <input id="amount" inputmode="numeric" pattern="[0-9]*" type="text" value="1"/></label>
-      <input id="roll" type="button" value="Roll" onclick="roll(sides.value, amount.value);"/>
-      <input id="clear" type="button" value="Clear" onclick="if(confirm('Are you sure?')) clearOutput();"/>
+      <input id="roll" type="button" value="Roll" disabled onclick="roll(sides.value, amount.value);"/>
+      <input id="clear" type="button" value="Clear" disabled onclick="if(confirm('Are you sure?')) clearOutput();"/>
     </div>
   </div>
 </body>
