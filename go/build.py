@@ -9,7 +9,7 @@ DIST = ROOT / "dist"
 ASSETS = ROOT / "assets"
 TEMPLATE = ASSETS / "service-worker.js.in"
 
-shutil.copytree(ASSETS, DIST, dirs_exist_ok=True, ignore=shutil.ignore_patterns(TEMPLATE.name))
+shutil.copytree(ASSETS, DIST, dirs_exist_ok=True, ignore=shutil.ignore_patterns(TEMPLATE.name, ".DS_Store"))
 version = hashlib.sha256(TEMPLATE.read_bytes())
 paths = sorted(path.relative_to(DIST).as_posix() for path in DIST.rglob("*") if path.is_file())
 for name in paths:

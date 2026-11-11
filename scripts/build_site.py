@@ -14,9 +14,10 @@ def main():
             raise SystemExit(f"Build {name} before assembling the site.")
     if output.exists():
         shutil.rmtree(output)
-    shutil.copytree(ROOT / "site", output)
+    ignore = shutil.ignore_patterns(".DS_Store", "__pycache__")
+    shutil.copytree(ROOT / "site", output, ignore=ignore)
     for name, source in applications.items():
-        shutil.copytree(source, output / name)
+        shutil.copytree(source, output / name, ignore=ignore)
     (output / ".nojekyll").touch()
 
 
