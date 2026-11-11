@@ -1,0 +1,9 @@
+{{if eq .Item.Action.Tag "roll"}}
+<div class="dice-result">
+{{if ne .Item.Action.Mode "all"}}<p class="aggregate-result">{{.Score}}</p>{{end}}
+<div class="dice-values{{if ne .Item.Action.Mode "all"}} dice-breakdown{{end}}">{{range .Dice}}<span class="die-group{{if .Kept}} kept{{end}}">{{if .Kept}}<span class="sr-only">Kept die: </span>{{end}}{{.Text}}</span>{{end}}</div>
+{{if .Total}}<p class="result-meta">Total {{.Total}}</p>{{end}}
+</div>
+{{else if eq .Item.Action.Tag "ask"}}<p class="word-result">{{.Item.Word}}</p>
+{{else if .CatalogReady}}<div class="pictograms">{{range .Icons}}<img class="pictogram" src="{{.Path}}" alt="{{.Name}}" title="{{.Name}}" {{if $.Compact}}loading="lazy"{{end}}>{{end}}</div>
+{{else}}<p class="muted">{{.CatalogMessage}}</p>{{end}}

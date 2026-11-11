@@ -1,9 +1,10 @@
+import dice_roller/build_info
 import dice_roller/catalog.{type Catalog, Ready}
 import dice_roller/session.{type Action, type Session, type Sources, Pictograms}
 import dice_roller/settings.{type Change, type Settings}
 import gleam/option.{type Option, None}
 
-pub const version = "0.9.0"
+pub const version = build_info.version
 
 pub type Problem {
   InvalidLink

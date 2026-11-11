@@ -1,3 +1,3 @@
-module github.com/kerrigan29a/go_pwa
+module github.com/Kerrigan29a/dice_roller/go
 
-go 1.19
+go 1.27.4

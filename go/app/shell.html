@@ -1,0 +1,43 @@
+{{define "theme"}}<div class="theme-control"><label for="theme-{{.}}">Theme:</label><select id="theme-{{.}}" aria-label="Theme"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>{{end}}
+<div class="app-shell" id="app-shell" data-theme="auto">
+  <header class="topbar"><div class="topbar-inner">
+    <div class="brand"><img class="brand-icon" src="../assets/brand-die.png" alt="" width="36" height="36"><div class="brand-name"><h1>Dice Roller</h1><small class="muted app-version">v{{.}}</small></div></div>
+    <div class="header-actions"><div class="header-utilities"><button type="button" class="secondary" data-action="share">Share</button><div class="desktop-theme">{{template "theme" "desktop"}}</div></div>
+      <div class="history-action"><button type="button" class="menu-action" data-action="clear">Clear history…</button></div>
+      <details class="more-menu"><summary>More<span class="more-icon" aria-hidden="true">⋯</span></summary><div class="more-menu-content">{{template "theme" "mobile"}}<button type="button" class="menu-action" data-action="clear">Clear history…</button></div></details>
+    </div>
+  </div></header>
+  <main class="page">
+    <section class="problem-banner" id="problem" hidden></section>
+    <div class="notice" id="save-notice" hidden><p role="status" id="save-issue"></p></div>
+    <div class="workspace">
+      <div class="modes" role="tablist" aria-label="Tools" id="tool-tabs">
+        <button type="button" role="tab" id="tool-tab-dice" aria-controls="tool-panel-dice" aria-selected="true" tabindex="0" data-tool="dice">Dice</button>
+        <button type="button" role="tab" id="tool-tab-words" aria-controls="tool-panel-words" aria-selected="false" tabindex="-1" data-tool="words">Words</button>
+        <button type="button" role="tab" id="tool-tab-icons" aria-controls="tool-panel-icons" aria-selected="false" tabindex="-1" data-tool="icons">Pictograms</button>
+      </div>
+      <div class="workspace-controls" id="controls">
+        <div role="tabpanel" id="tool-panel-dice" aria-labelledby="tool-tab-dice"></div>
+        <div role="tabpanel" id="tool-panel-words" aria-labelledby="tool-tab-words" hidden></div>
+        <div role="tabpanel" id="tool-panel-icons" aria-labelledby="tool-tab-icons" hidden></div>
+      </div>
+      <section class="result-panel" aria-labelledby="latest-result"><div class="result-content" aria-live="polite" aria-atomic="true">
+        <div class="result-heading"><h2 id="latest-result" tabindex="-1">Latest result</h2></div>
+        <div id="latest-value"></div><p class="result-meta" id="latest-label" hidden></p>
+      </div></section>
+    </div>
+    <aside class="history-panel" id="history-panel" aria-labelledby="history-heading" hidden><h2 id="history-heading">History</h2><ol class="history-list" id="history-list"></ol><button type="button" class="secondary history-toggle" id="history-toggle" aria-controls="history-list" aria-expanded="false" data-action="history" hidden></button></aside>
+  </main>
+  <dialog id="table-dialog" class="dialog table-dialog" aria-labelledby="table-dialog-title">
+    <div class="dialog-heading"><h2 id="table-dialog-title">Choose a table</h2><button type="button" class="secondary" data-close="table-dialog">Cancel</button></div>
+    <div class="field"><label for="table-search">Search Mythic 2e tables</label><input id="table-search" type="search" autofocus></div><div class="table-results" id="table-results"></div>
+  </dialog>
+  <dialog id="share-dialog" class="dialog" aria-labelledby="share-dialog-title">
+    <h2 id="share-dialog-title">Share results</h2><p class="muted">Open this link in another browser to reproduce these results and continue rolling.</p>
+    <div class="field"><label for="share-link">Results link</label><input id="share-link" type="text" readonly></div>
+    <p role="status" class="share-status" id="share-status"></p><div class="dialog-actions"><button type="button" class="secondary" data-close="share-dialog">Close</button><button type="button" class="primary" data-action="copy">Copy link</button></div>
+  </dialog>
+  <dialog id="clear-dialog" class="dialog" aria-labelledby="clear-dialog-title" aria-describedby="clear-dialog-description">
+    <h2 id="clear-dialog-title">Clear history?</h2><p id="clear-dialog-description"></p><div class="dialog-actions"><button type="button" class="secondary" autofocus data-close="clear-dialog">Cancel</button><button type="button" class="danger" id="confirm-clear" data-action="confirm-clear">Clear history</button></div>
+  </dialog>
+</div>

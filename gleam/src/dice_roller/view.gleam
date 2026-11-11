@@ -57,7 +57,7 @@ fn header(model: Model) -> Element(Message) {
       html.div([attr.class("brand")], [
         html.img([
           attr.class("brand-icon"),
-          attr.src("brand-die.png"),
+          attr.src("../assets/brand-die.png"),
           attr.alt(""),
           attr.attribute("width", "36"),
           attr.attribute("height", "36"),

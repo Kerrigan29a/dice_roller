@@ -1,10 +1,9 @@
 port module Main exposing (main)
 
 import Array exposing (Array)
+import Base64
 import Browser
 import Browser.Dom as Dom
-import Browser.Navigation as Nav
-import Base64
 import Dict
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -19,11 +18,12 @@ import Tables exposing (tables)
 import Task
 import Time exposing (Posix, Zone)
 import Url
+import Version
 
 
 version : String
 version =
-    "0.9.0"
+    Version.value
 
 
 schemaVersion : Int
@@ -59,20 +59,15 @@ resultModeName mode =
 
 resultModeDecoder : D.Decoder ResultMode
 resultModeDecoder =
-    D.maybe (D.field "resultMode" D.string)
+    D.field "resultMode" D.string
         |> D.andThen
-            (\stored ->
-                case stored of
+            (\name ->
+                case List.Extra.find (\( _, label_ ) -> String.toLower label_ == name) resultModes of
+                    Just ( mode, _ ) ->
+                        D.succeed mode
+
                     Nothing ->
-                        D.succeed AllDice
-
-                    Just name ->
-                        case List.Extra.find (\( _, label_ ) -> String.toLower label_ == name) resultModes of
-                            Just ( mode, _ ) ->
-                                D.succeed mode
-
-                            Nothing ->
-                                D.fail "Unknown dice result mode"
+                        D.fail "Unknown dice result mode"
             )
 
 
@@ -80,8 +75,6 @@ type Action
     = RollAction Int Int Bool ResultMode
     | AskAction String
     | ShowAction Int
-    | ClearAction
-    | ResetSeed Int
 
 
 type alias RecordedAction =
@@ -114,12 +107,7 @@ actionEncoder recorded =
                  , ( "explode", E.bool explode )
                  , ( "ts", E.int (Time.posixToMillis recorded.timestamp) )
                  ]
-                    ++ (if resultMode == AllDice then
-                            []
-
-                        else
-                            [ ( "resultMode", E.string (String.toLower (resultModeName resultMode)) ) ]
-                       )
+                    ++ [ ( "resultMode", E.string (String.toLower (resultModeName resultMode)) ) ]
                 )
 
         AskAction table ->
@@ -136,28 +124,12 @@ actionEncoder recorded =
                 , ( "ts", E.int (Time.posixToMillis recorded.timestamp) )
                 ]
 
-        ClearAction ->
-            E.object
-                [ ( "tag", E.string "clear" )
-                , ( "ts", E.int (Time.posixToMillis recorded.timestamp) )
-                ]
-
-        ResetSeed value ->
-            E.object
-                [ ( "tag", E.string "resetSeed" )
-                , ( "value", E.int value )
-                , ( "ts", E.int (Time.posixToMillis recorded.timestamp) )
-                ]
-
 
 actionDecoder : D.Decoder RecordedAction
 actionDecoder =
     let
         tsDecoder =
-            D.oneOf
-                [ D.field "ts" D.int |> D.map Time.millisToPosix
-                , D.succeed (Time.millisToPosix 0)
-                ]
+            D.field "ts" D.int |> D.map Time.millisToPosix
     in
     D.map2
         (\timestamp action -> { action = action, timestamp = timestamp })
@@ -179,12 +151,6 @@ actionDecoder =
                         "show" ->
                             D.field "iconAmount" D.int |> D.map ShowAction
 
-                        "clear" ->
-                            D.succeed ClearAction
-
-                        "resetSeed" ->
-                            D.field "value" D.int |> D.map ResetSeed
-
                         _ ->
                             D.fail "Unknown action tag"
                 )
@@ -194,31 +160,33 @@ actionDecoder =
 decoder : D.Decoder PersistedState
 decoder =
     D.map4 PersistedState
-        (D.field "version" D.int
-            |> D.map
-                (\v ->
-                    if v <= 0 then
-                        1
-
-                    else
-                        v
-                )
-        )
+        (D.field "version" D.int)
         (D.field "seed" D.int)
         (D.field "actions" (D.list actionDecoder))
-        (D.oneOf [ D.field "theme" (D.string |> D.map themeFromString), D.succeed Auto ])
+        (D.field "theme" (D.map themeFromString D.string))
 
 
 savedStateDecoder : D.Decoder DecodedState
 savedStateDecoder =
-    D.field "version" D.int
+    D.field "format" D.string
         |> D.andThen
-            (\storedVersion ->
-                if storedVersion > schemaVersion then
-                    D.succeed (NewerVersion storedVersion)
+            (\format ->
+                if format /= "elm-dice-roller" then
+                    D.fail "Unknown state format"
 
                 else
-                    D.map SupportedState decoder
+                    D.field "version" D.int
+                        |> D.andThen
+                            (\storedVersion ->
+                                if storedVersion > schemaVersion then
+                                    D.succeed (NewerVersion storedVersion)
+
+                                else if storedVersion == schemaVersion then
+                                    D.map SupportedState decoder
+
+                                else
+                                    D.fail "Unsupported state format"
+                            )
             )
 
 
@@ -316,15 +284,8 @@ type Tool
     | IconTool
 
 
-type Session
-    = OwnSession
-    | SessionCopy
-    | SharedSession
-
-
 type SessionProblem
     = InvalidLink
-    | MissingCopy
     | NewerFormat Int
 
 
@@ -360,9 +321,18 @@ type alias Preferences =
     }
 
 
+type alias Flags =
+    { session : E.Value
+    , preferences : E.Value
+    , hasState : Bool
+    , stateToken : String
+    , iconCount : Int
+    , shareBase : String
+    }
+
+
 type alias Model =
     { preferences : Preferences
-    , session : Session
     , problem : Maybe SessionProblem
     , saveIssue : Maybe String
     , seedValue : Int
@@ -382,10 +352,53 @@ type alias Model =
     }
 
 
+type PreferenceChange
+    = ToolSelected Tool
+    | DiceCountChanged String
+    | SidesChanged String
+    | PresetSelected String
+    | CustomSelected
+    | ExplodingChanged Bool
+    | ModeSelected ResultMode
+    | IconCountChanged String
+    | ThemeSelected ThemeMode
+
+
+applyPreference : PreferenceChange -> Preferences -> Preferences
+applyPreference change prefs =
+    case change of
+        ToolSelected tool ->
+            { prefs | tool = tool }
+
+        DiceCountChanged value ->
+            { prefs | amount = value }
+
+        SidesChanged value ->
+            { prefs | sides = value }
+
+        PresetSelected value ->
+            { prefs | sides = value, custom = False }
+
+        CustomSelected ->
+            { prefs | custom = True }
+
+        ExplodingChanged value ->
+            { prefs | explode = value }
+
+        ModeSelected mode ->
+            { prefs | resultMode = mode }
+
+        IconCountChanged value ->
+            { prefs | iconAmount = value }
+
+        ThemeSelected theme ->
+            { prefs | theme = theme }
+
+
 type Msg
     = GotCatalog (Result Http.Error (List String))
     | RetryCatalog
-    | SetPreferences Preferences
+    | SetPreferences PreferenceChange
     | SelectTool Tool
     | RunTool
     | Repeat Action
@@ -400,12 +413,10 @@ type Msg
     | ConfirmClear
     | CopyLink
     | ClipboardResult Bool
-    | SaveAsCopy
     | SaveIssue String
-    | BackToOwnSession
+    | OpenSavedResults
     | UpdateApp
     | GotZone Zone
-    | Navigate Browser.UrlRequest
     | NoOp
 
 
@@ -415,10 +426,7 @@ port saveSession : E.Value -> Cmd msg
 port savePreferences : E.Value -> Cmd msg
 
 
-port createCopy : E.Value -> Cmd msg
-
-
-port ownSession : () -> Cmd msg
+port openSavedResults : () -> Cmd msg
 
 
 port reloadApp : () -> Cmd msg
@@ -436,44 +444,38 @@ port storageIssue : (String -> msg) -> Sub msg
 port setDialog : { id : String, visible : Bool } -> Cmd msg
 
 
-main : Program E.Value Model Msg
+main : Program Flags Model Msg
 main =
-    Browser.application
+    Browser.element
         { init = init
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.batch [ clipboardResult ClipboardResult, storageIssue SaveIssue ]
-        , onUrlRequest = Navigate
-        , onUrlChange = \_ -> NoOp
         }
 
 
-init : E.Value -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url _ =
+init : Flags -> ( Model, Cmd Msg )
+init flags =
     let
-        fromFlags field decoder_ =
-            D.decodeValue (D.field field decoder_) flags |> Result.toMaybe
-
         stored =
-            fromFlags "session" savedStateDecoder
+            D.decodeValue savedStateDecoder flags.session |> Result.toMaybe
 
-        inCopy =
-            fromFlags "copy" D.bool |> Maybe.withDefault False
+        fromLink =
+            flags.hasState
 
-        shared =
-            stateParameter url
+        selected =
+            if fromLink then
+                decodeStateFromString flags.stateToken
 
-        ( session, selected, missing ) =
-            case shared of
-                Just token ->
-                    ( SharedSession, decodeStateFromString token, Just InvalidLink )
+            else
+                stored
 
-                Nothing ->
-                    if inCopy then
-                        ( SessionCopy, stored, Just MissingCopy )
+        missing =
+            if fromLink then
+                Just InvalidLink
 
-                    else
-                        ( OwnSession, stored, Nothing )
+            else
+                Nothing
 
         ( saved, problem ) =
             case selected of
@@ -490,12 +492,12 @@ init flags url _ =
             defaults (Maybe.map .theme saved |> Maybe.withDefault Auto)
 
         preferences =
-            fromFlags "preferences" (preferencesDecoder startPreferences)
+            D.decodeValue (preferencesDecoder startPreferences) flags.preferences
+                |> Result.toMaybe
                 |> Maybe.withDefault startPreferences
 
         initial =
             { preferences = preferences
-            , session = session
             , problem = problem
             , saveIssue = Nothing
             , seedValue = 0
@@ -506,9 +508,9 @@ init flags url _ =
             , showHistory = False
             , validation = False
             , catalog = CatalogLoading
-            , iconCount = fromFlags "iconCount" D.int |> Maybe.withDefault 0
+            , iconCount = flags.iconCount
             , tableQuery = ""
-            , shareBase = fromFlags "shareBase" D.string |> Maybe.withDefault ""
+            , shareBase = flags.shareBase
             , shareLink = ""
             , clipboard = Nothing
             , zone = Time.utc
@@ -531,7 +533,18 @@ init flags url _ =
             else
                 Cmd.none
     in
-    ( model, Cmd.batch [ seedCommand, loadCatalog, Task.perform GotZone Time.here ] )
+    ( model
+    , Cmd.batch
+        [ seedCommand
+        , loadCatalog
+        , Task.perform GotZone Time.here
+        , if saved /= Nothing && problem == Nothing then
+            save model
+
+          else
+            Cmd.none
+        ]
+    )
 
 
 defaults : ThemeMode -> Preferences
@@ -596,7 +609,7 @@ preferencesDecoder initial =
             (optional "explode" D.bool initial.explode)
             (optional "table" (D.map knownTable D.string) initial.table)
             (optional "iconAmount" D.string initial.iconAmount)
-            (optional "theme" (D.map themeFromString D.string) initial.theme)
+            (D.succeed initial.theme)
         )
         (D.oneOf [ resultModeDecoder, D.succeed initial.resultMode ])
 
@@ -611,46 +624,19 @@ encodePreferences prefs =
         , ( "explode", E.bool prefs.explode )
         , ( "table", E.string prefs.table )
         , ( "iconAmount", E.string prefs.iconAmount )
-        , ( "theme", E.string (themeToString prefs.theme) )
         , ( "resultMode", E.string (String.toLower (resultModeName prefs.resultMode)) )
         ]
 
 
 encode : Model -> E.Value
 encode model =
-    let
-        usesResultMode item =
-            case item.action of
-                RollAction _ _ _ mode ->
-                    mode /= AllDice
-
-                _ ->
-                    False
-
-        format =
-            if List.any usesResultMode model.actions then
-                schemaVersion
-
-            else
-                1
-    in
     E.object
-        [ ( "version", E.int format )
+        [ ( "format", E.string "elm-dice-roller" )
+        , ( "version", E.int schemaVersion )
         , ( "seed", E.int model.seedValue )
         , ( "actions", E.list actionEncoder (List.reverse model.actions) )
         , ( "theme", E.string (themeToString model.preferences.theme) )
         ]
-
-
-stateParameter : Url.Url -> Maybe String
-stateParameter url =
-    url.query
-        |> Maybe.andThen
-            (String.split "&"
-                >> List.filter (String.startsWith "state=")
-                >> List.head
-                >> Maybe.map (String.dropLeft 6)
-            )
 
 
 decodeStateFromString : String -> Maybe DecodedState
@@ -663,7 +649,7 @@ decodeStateFromString encoded =
 loadCatalog : Cmd Msg
 loadCatalog =
     Http.get
-        { url = "./icons/icons.json"
+        { url = "../assets/icons/icons.json"
         , expect = Http.expectJson GotCatalog iconsDecoder
         }
 
@@ -678,7 +664,7 @@ iconsDecoder =
                         Dict.toList authors
                             |> List.concatMap
                                 (\( author, icons ) ->
-                                    List.map (\icon -> "./icons/ffffff/transparent/" ++ size ++ "/" ++ author ++ "/" ++ icon ++ ".svg") icons
+                                    List.map (\icon -> "../assets/icons/ffffff/transparent/" ++ size ++ "/" ++ author ++ "/" ++ icon ++ ".svg") icons
                                 )
                     )
                 >> List.sort
@@ -697,13 +683,17 @@ startSeed value model =
 
 canEdit : Model -> Bool
 canEdit model =
-    model.session /= SharedSession && model.problem == Nothing && model.seedReady
+    model.problem == Nothing && model.seedReady
 
 
 save : Model -> Cmd Msg
 save model =
     if canEdit model then
-        saveSession (encode model)
+        let
+            json =
+                encode model |> E.encode 0
+        in
+        saveSession (E.object [ ( "json", E.string json ), ( "token", E.string (json |> Base64.encode |> Url.percentEncode) ) ])
 
     else
         Cmd.none
@@ -791,10 +781,19 @@ update msg model =
         RetryCatalog ->
             ( { model | catalog = CatalogLoading }, loadCatalog )
 
-        SetPreferences preferences ->
+        SetPreferences change ->
+            let
+                preferences =
+                    applyPreference change model.preferences
+            in
             ( { model | preferences = preferences, validation = False }
             , Cmd.batch
                 [ savePreferences (encodePreferences preferences)
+                , if preferences.theme /= model.preferences.theme then
+                    save { model | preferences = preferences }
+
+                  else
+                    Cmd.none
                 , if preferences.tool == DiceTool && preferences.custom && not model.preferences.custom then
                     focus "dice-sides"
 
@@ -809,7 +808,7 @@ update msg model =
                     model.preferences
 
                 ( updated, savePrefs ) =
-                    update (SetPreferences { prefs | tool = tool }) model
+                    update (SetPreferences (ToolSelected tool)) model
             in
             ( updated, Cmd.batch [ savePrefs, focus (toolTabId tool) ] )
 
@@ -929,28 +928,17 @@ update msg model =
         ClipboardResult result ->
             ( { model | clipboard = Just result }, Cmd.none )
 
-        SaveAsCopy ->
-            ( model, createCopy (encode model) )
-
         SaveIssue reason ->
             ( { model | saveIssue = Just reason }, Cmd.none )
 
-        BackToOwnSession ->
-            ( model, ownSession () )
+        OpenSavedResults ->
+            ( model, openSavedResults () )
 
         UpdateApp ->
             ( model, reloadApp () )
 
         GotZone zone ->
             ( { model | zone = zone }, Cmd.none )
-
-        Navigate request ->
-            case request of
-                Browser.Internal url ->
-                    ( model, Nav.load (Url.toString url) )
-
-                Browser.External url ->
-                    ( model, Nav.load url )
 
         NoOp ->
             ( model, Cmd.none )
@@ -1010,94 +998,72 @@ recordAction action timestamp model =
         ShowAction amount ->
             generate (Random.list amount (Random.int 0 (model.iconCount - 1))) IconResult
 
-        ClearAction ->
-            { model | actions = recorded :: model.actions, history = [] }
 
-        ResetSeed value ->
-            { model | actions = recorded :: model.actions, seed = Random.initialSeed value }
-
-
-view : Model -> Browser.Document Msg
+view : Model -> Html Msg
 view model =
-    let
-        showTools =
-            model.session /= SharedSession && model.problem == Nothing
-    in
-    { title = "Dice Roller (v" ++ version ++ ")"
-    , body =
-        [ div [ class "app-shell", attribute "data-theme" (themeToString model.preferences.theme) ]
-            [ viewHeader model
-            , main_ [ class "page" ]
-                [ viewSession model
-                , viewSaveIssue model
-                , div [ class "workspace" ]
-                    [ if showTools then
-                        viewToolTabs model.preferences.tool
+    div [ class "app-shell", attribute "data-theme" (themeToString model.preferences.theme) ]
+        [ viewHeader model
+        , main_ [ class "page" ]
+            [ viewSession model
+            , viewSaveIssue model
+            , div [ class "workspace" ]
+                [ if model.problem == Nothing then
+                    viewToolTabs model.preferences.tool
 
-                      else
-                        text ""
-                    , if showTools then
-                        div [ class "workspace-controls" ] (List.map (viewToolPanel model << Tuple.first) tools)
+                  else
+                    text ""
+                , if model.problem == Nothing then
+                    div [ class "workspace-controls" ] (List.map (viewToolPanel model << Tuple.first) tools)
 
-                      else
-                        text ""
-                    , div [ class "workspace-output" ]
-                        [ viewResult model
-                        , viewHistory model
-                        ]
-                    ]
+                  else
+                    text ""
+                , viewResult model
                 ]
-            , viewTableDialog model
-            , viewShareDialog model
-            , viewClearDialog model
+            , viewHistory model
             ]
+        , viewTableDialog model
+        , viewShareDialog model
+        , viewClearDialog model
         ]
-    }
 
 
 viewHeader : Model -> Html Msg
 viewHeader model =
+    let
+        clear =
+            if canEdit model then
+                button [ type_ "button", class "menu-action", onClick (OpenDialog "clear-dialog") ] [ text "Clear history…" ]
+
+            else
+                text ""
+    in
     header [ class "topbar" ]
         [ div [ class "topbar-inner" ]
             [ div [ class "brand" ]
-                [ img [ class "brand-icon", src "favicon-32x32.png", alt "", width 32, height 32 ] []
-                , h1 [] [ text "Dice Roller" ]
+                [ img [ class "brand-icon", src "../assets/brand-die.png", alt "", width 36, height 36 ] []
+                , div [ class "brand-name" ] [ h1 [] [ text "Dice Roller" ], small [ class "muted app-version" ] [ text ("v" ++ version) ] ]
                 ]
             , div [ class "header-actions" ]
-                [ button
-                    [ type_ "button"
-                    , class "secondary"
-                    , onClick (OpenDialog "share-dialog")
-                    , disabled (not model.seedReady || model.problem /= Nothing)
+                [ div [ class "header-utilities" ]
+                    [ button [ type_ "button", class "secondary", onClick (OpenDialog "share-dialog"), disabled (not model.seedReady || model.problem /= Nothing) ] [ text "Share" ]
+                    , div [ class "desktop-theme" ] [ viewTheme "theme-desktop" model.preferences ]
                     ]
-                    [ text "Share" ]
-                , details [ class "session-menu" ]
-                    [ summary [] [ text "Session" ]
-                    , div [ class "session-menu-content" ]
-                        [ viewTheme model.preferences
-                        , if canEdit model then
-                            button [ type_ "button", class "menu-action", onClick (OpenDialog "clear-dialog") ]
-                                [ text "Clear history…" ]
-
-                          else
-                            text ""
-                        , small [ class "muted" ] [ text ("Version " ++ version) ]
-                        ]
+                , div [ class "history-action" ] [ clear ]
+                , details [ class "more-menu" ]
+                    [ summary [] [ text "More", span [ class "more-icon", attribute "aria-hidden" "true" ] [ text "⋯" ] ]
+                    , div [ class "more-menu-content" ] [ viewTheme "theme-mobile" model.preferences, clear ]
                     ]
                 ]
             ]
         ]
 
 
-viewTheme : Preferences -> Html Msg
-viewTheme prefs =
-    div [ class "field" ]
-        [ label [ for "theme" ] [ text "Theme" ]
-        , select [ id "theme", onInput (\value -> SetPreferences { prefs | theme = themeFromString value }) ]
-            (List.map
-                (\( theme, name ) ->
-                    option [ value (themeToString theme), selected (theme == prefs.theme) ] [ text name ]
-                )
+viewTheme : String -> Preferences -> Html Msg
+viewTheme id_ prefs =
+    div [ class "theme-control" ]
+        [ label [ for id_ ] [ text "Theme:" ]
+        , select [ id id_, attribute "aria-label" "Theme", onInput (\value -> SetPreferences (ThemeSelected (themeFromString value))) ]
+            (List.map (\( theme, name ) -> option [ value (themeToString theme), selected (theme == prefs.theme) ] [ text name ])
                 [ ( Auto, "System" ), ( Light, "Light" ), ( Dark, "Dark" ) ]
             )
         ]
@@ -1107,45 +1073,27 @@ viewSession : Model -> Html Msg
 viewSession model =
     let
         back =
-            button [ type_ "button", class "secondary", onClick BackToOwnSession ] [ text "My session" ]
+            button [ type_ "button", class "secondary", onClick OpenSavedResults ] [ text "Open saved results" ]
     in
     case model.problem of
         Just InvalidLink ->
             sessionBanner "Shared link unavailable" "This link could not be opened." [ back ]
 
-        Just MissingCopy ->
-            sessionBanner "Session copy unavailable" "This copy is stored in the browser that created it." [ back ]
-
         Just (NewerFormat storedVersion) ->
             sessionBanner "Newer version detected"
-                ("This session uses format " ++ String.fromInt storedVersion ++ ". Try updating Dice Roller to open it.")
+                ("These results use format " ++ String.fromInt storedVersion ++ ". Try updating Dice Roller to open it.")
                 [ button [ type_ "button", class "secondary", onClick UpdateApp ] [ text "Update and reload" ]
-                , if model.session == OwnSession then
-                    button [ type_ "button", class "secondary", onClick (OpenDialog "clear-dialog") ] [ text "Start a new session…" ]
-
-                  else
-                    back
+                , back
+                , button [ type_ "button", class "secondary", onClick (OpenDialog "clear-dialog") ] [ text "Start new…" ]
                 ]
 
         Nothing ->
-            case model.session of
-                OwnSession ->
-                    text ""
-
-                SessionCopy ->
-                    sessionBanner "Session copy" "Changes in this copy are saved separately." [ back ]
-
-                SharedSession ->
-                    sessionBanner "Shared session"
-                        (countLabel (List.length model.history) "result" ++ " in this snapshot.")
-                        [ button [ type_ "button", class "primary", onClick SaveAsCopy ] [ text "Continue as a copy" ]
-                        , back
-                        ]
+            text ""
 
 
 sessionBanner : String -> String -> List (Html Msg) -> Html Msg
 sessionBanner heading description actions =
-    section [ class "session-banner" ]
+    section [ class "problem-banner" ]
         [ div []
             [ h2 [] [ text heading ]
             , p [ class "muted" ] [ text description ]
@@ -1158,14 +1106,7 @@ viewSaveIssue : Model -> Html Msg
 viewSaveIssue model =
     case model.saveIssue of
         Just message ->
-            div [ class "notice" ]
-                [ p [ attribute "role" "status" ] [ text message ]
-                , if canEdit model then
-                    button [ type_ "button", class "secondary", onClick SaveAsCopy ] [ text "Save as a copy" ]
-
-                  else
-                    text ""
-                ]
+            div [ class "notice" ] [ p [ attribute "role" "status" ] [ text message ] ]
 
         Nothing ->
             text ""
@@ -1232,7 +1173,13 @@ viewToolTabs activeTool =
                 , attribute "role" "tab"
                 , attribute "aria-selected" (boolString active)
                 , attribute "aria-controls" (toolPanelId tool)
-                , tabindex (if active then 0 else -1)
+                , tabindex
+                    (if active then
+                        0
+
+                     else
+                        -1
+                    )
                 , onClick (SelectTool tool)
                 , preventDefaultOn "keydown" onKey
                 ]
@@ -1305,8 +1252,12 @@ viewToolForm model =
 
             IconTool ->
                 div [ class "icon-controls" ]
-                    [ numericField "icon-amount" "Pictogram count" prefs.iconAmount model.validation (Just "pictograms")
-                        (\value -> SetPreferences { prefs | iconAmount = value })
+                    [ numericField "icon-amount"
+                        "Pictogram count"
+                        prefs.iconAmount
+                        model.validation
+                        (Just "pictograms")
+                        (\value -> SetPreferences (IconCountChanged value))
                     , viewCatalogStatus model.catalog
                     ]
         , button
@@ -1332,7 +1283,7 @@ viewDice model =
             button
                 [ type_ "button"
                 , attribute "aria-pressed" (boolString (not prefs.custom && prefs.sides == value_))
-                , onClick (SetPreferences { prefs | sides = value_, custom = False })
+                , onClick (SetPreferences (PresetSelected value_))
                 ]
                 [ text ("d" ++ value_) ]
     in
@@ -1344,18 +1295,26 @@ viewDice model =
                     ++ [ button
                             [ type_ "button"
                             , attribute "aria-pressed" (boolString prefs.custom)
-                            , onClick (SetPreferences { prefs | custom = True })
+                            , onClick (SetPreferences CustomSelected)
                             ]
                             [ text "Custom" ]
                        ]
                 )
             ]
         , div [ class "dice-fields" ]
-            [ numericField "dice-amount" "Dice count" prefs.amount model.validation (Just "dice")
-                (\value_ -> SetPreferences { prefs | amount = value_ })
+            [ numericField "dice-amount"
+                "Dice count"
+                prefs.amount
+                model.validation
+                (Just "dice")
+                (\value_ -> SetPreferences (DiceCountChanged value_))
             , if prefs.custom then
-                numericField "dice-sides" "Sides" prefs.sides model.validation Nothing
-                    (\value_ -> SetPreferences { prefs | sides = value_ })
+                numericField "dice-sides"
+                    "Sides"
+                    prefs.sides
+                    model.validation
+                    Nothing
+                    (\value_ -> SetPreferences (SidesChanged value_))
 
               else
                 text ""
@@ -1363,7 +1322,7 @@ viewDice model =
                 [ input
                     [ type_ "checkbox"
                     , checked prefs.explode
-                    , onCheck (\value_ -> SetPreferences { prefs | explode = value_ })
+                    , onCheck (\value_ -> SetPreferences (ExplodingChanged value_))
                     ]
                     []
                 , text "Exploding"
@@ -1379,7 +1338,7 @@ viewDice model =
                                 [ type_ "radio"
                                 , name "dice-result-mode"
                                 , checked (prefs.resultMode == mode)
-                                , onCheck (\_ -> SetPreferences { prefs | resultMode = mode })
+                                , onCheck (\_ -> SetPreferences (ModeSelected mode))
                                 ]
                                 []
                             , span [] [ text label_ ]
@@ -1399,21 +1358,21 @@ numericField id_ name current validate stepper change =
 
         editor =
             input
-            ([ id id_
-             , type_ "text"
-             , attribute "inputmode" "numeric"
-             , autocomplete False
-             , value current
-             , onInput change
-             ]
-                ++ (if invalid then
-                        [ attribute "aria-invalid" "true", attribute "aria-describedby" (id_ ++ "-error") ]
+                ([ id id_
+                 , type_ "text"
+                 , attribute "inputmode" "numeric"
+                 , autocomplete False
+                 , value current
+                 , onInput change
+                 ]
+                    ++ (if invalid then
+                            [ attribute "aria-invalid" "true", attribute "aria-describedby" (id_ ++ "-error") ]
 
-                    else
-                        []
-                   )
-            )
-            []
+                        else
+                            []
+                       )
+                )
+                []
 
         number =
             positiveInt current
@@ -1432,7 +1391,7 @@ numericField id_ name current validate stepper change =
         , case stepper of
             Just unit ->
                 div [ class "quantity-stepper" ]
-                    [ step ("Fewer " ++ unit) "−" (-1) (Maybe.withDefault 1 number <= 1)
+                    [ step ("Fewer " ++ unit) "−" -1 (Maybe.withDefault 1 number <= 1)
                     , editor
                     , step ("More " ++ unit) "+" 1 (number == Just 2147483647)
                     ]
@@ -1474,12 +1433,6 @@ viewResult model =
         [ div [ class "result-content", attribute "aria-live" "polite", attribute "aria-atomic" "true" ]
             [ div [ class "result-heading" ]
                 [ h2 [ id "latest-result", tabindex -1 ] [ text "Latest result" ]
-                , case latest of
-                    Just item ->
-                        p [ class "result-meta" ] [ text (actionLabel item.action) ]
-
-                    Nothing ->
-                        text ""
                 ]
             , case latest of
                 Just item ->
@@ -1493,6 +1446,12 @@ viewResult model =
                         [ span [ attribute "aria-hidden" "true" ] [ text "—" ]
                         , span [ class "sr-only" ] [ text "No result yet." ]
                         ]
+            , case latest of
+                Just item ->
+                    p [ class "result-meta" ] [ text (actionLabel item.action) ]
+
+                Nothing ->
+                    text ""
             ]
         ]
 
@@ -1603,10 +1562,7 @@ viewEntry compact catalog entry =
                 group index die =
                     span [ classList [ ( "die-group", True ), ( "kept", kept == Just index ) ] ]
                         [ if kept == Just index then
-                            span [ class "kept-marker" ]
-                                [ span [ attribute "aria-hidden" "true" ] [ text "✓" ]
-                                , span [ class "sr-only" ] [ text "Kept die: " ]
-                                ]
+                            span [ class "sr-only" ] [ text "Kept die: " ]
 
                           else
                             text ""
@@ -1640,17 +1596,7 @@ viewEntry compact catalog entry =
                         pictures =
                             List.filterMap (\index -> Array.get index paths) indices
                     in
-                    if compact && List.length pictures > 3 then
-                        div [ class "pictogram-preview" ]
-                            [ div [ class "pictograms" ] (List.map (viewPictogram True) (List.take 3 pictures))
-                            , details [ class "extra-pictograms" ]
-                                [ summary [] [ text ("Show " ++ String.fromInt (List.length pictures - 3) ++ " more") ]
-                                , div [ class "pictograms" ] (List.map (viewPictogram True) (List.drop 3 pictures))
-                                ]
-                            ]
-
-                    else
-                        div [ class "pictograms" ] (List.map (viewPictogram compact) pictures)
+                    div [ class "pictograms" ] (List.map (viewPictogram compact) pictures)
 
                 CatalogLoading ->
                     p [ class "muted" ] [ text "Loading pictograms…" ]
@@ -1722,16 +1668,18 @@ actionLabel action =
         ShowAction amount ->
             countLabel amount "pictogram"
 
-        ClearAction ->
-            "Clear history"
-
-        ResetSeed _ ->
-            "Reset seed"
-
 
 countLabel : Int -> String -> String
 countLabel amount name =
-    String.fromInt amount ++ " " ++ name ++ (if amount == 1 then "" else "s")
+    String.fromInt amount
+        ++ " "
+        ++ name
+        ++ (if amount == 1 then
+                ""
+
+            else
+                "s"
+           )
 
 
 boolString : Bool -> String
@@ -1787,7 +1735,8 @@ viewTableDialog model =
                     choices
                 )
     in
-    node "dialog" [ id "table-dialog", class "dialog table-dialog", attribute "aria-labelledby" "table-dialog-title" ]
+    node "dialog"
+        [ id "table-dialog", class "dialog table-dialog", attribute "aria-labelledby" "table-dialog-title" ]
         [ div [ class "dialog-heading" ]
             [ h2 [ id "table-dialog-title" ] [ text "Choose a table" ]
             , button [ type_ "button", class "secondary", onClick (CloseDialog "table-dialog") ] [ text "Cancel" ]
@@ -1821,11 +1770,12 @@ viewTableDialog model =
 
 viewShareDialog : Model -> Html Msg
 viewShareDialog model =
-    node "dialog" [ id "share-dialog", class "dialog", attribute "aria-labelledby" "share-dialog-title" ]
-        [ h2 [ id "share-dialog-title" ] [ text "Share session" ]
-        , p [ class "muted" ] [ text "This link opens a snapshot of the results in this session." ]
+    node "dialog"
+        [ id "share-dialog", class "dialog", attribute "aria-labelledby" "share-dialog-title" ]
+        [ h2 [ id "share-dialog-title" ] [ text "Share results" ]
+        , p [ class "muted" ] [ text "Open this link in another browser to reproduce these results and continue rolling." ]
         , div [ class "field" ]
-            [ label [ for "share-link" ] [ text "Session link" ]
+            [ label [ for "share-link" ] [ text "Results link" ]
             , input [ id "share-link", type_ "text", readonly True, value model.shareLink ] []
             ]
         , p [ attribute "role" "status", class "share-status" ]
@@ -1854,11 +1804,12 @@ viewClearDialog model =
         replacingNewer =
             model.problem /= Nothing
     in
-    node "dialog" [ id "clear-dialog", class "dialog", attribute "aria-labelledby" "clear-dialog-title", attribute "aria-describedby" "clear-dialog-description" ]
+    node "dialog"
+        [ id "clear-dialog", class "dialog", attribute "aria-labelledby" "clear-dialog-title", attribute "aria-describedby" "clear-dialog-description" ]
         [ h2 [ id "clear-dialog-title" ]
             [ text
                 (if replacingNewer then
-                    "Start a new session?"
+                    "Start new?"
 
                  else
                     "Clear history?"
@@ -1867,7 +1818,7 @@ viewClearDialog model =
         , p [ id "clear-dialog-description" ]
             [ text
                 (if replacingNewer then
-                    "This will replace the session stored in this browser."
+                    "This will replace the results stored in this browser."
 
                  else
                     "This will remove " ++ countLabel (List.length model.history) "result" ++ " and start a new sequence."
@@ -1878,7 +1829,7 @@ viewClearDialog model =
             , button [ type_ "button", class "danger", onClick ConfirmClear ]
                 [ text
                     (if replacingNewer then
-                        "Start new session"
+                        "Start new"
 
                      else
                         "Clear history"

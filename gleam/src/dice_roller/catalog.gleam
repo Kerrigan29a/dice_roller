@@ -36,7 +36,11 @@ fn decoder() -> Decoder(List(String)) {
       |> dict.to_list
       |> list.flat_map(fn(author) {
         let prefix =
-          "./icons/ffffff/transparent/" <> size.0 <> "/" <> author.0 <> "/"
+          "../assets/icons/ffffff/transparent/"
+          <> size.0
+          <> "/"
+          <> author.0
+          <> "/"
         list.map(author.1, fn(name) { prefix <> name <> ".svg" })
       })
     })

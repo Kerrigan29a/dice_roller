@@ -1,9 +1,9 @@
 // Exercise the actual published directory layout, including PWA scope isolation.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const require = createRequire(new URL('../gleam/package.json', import.meta.url));
+const require = createRequire(new URL('../package.json', import.meta.url));
 const { chromium, firefox } = require('@playwright/test');
-const base = new URL(process.argv[2] || 'http://127.0.0.1:4176/dice_roller/');
+const base = new URL(process.argv[2] || 'http://127.0.0.1:4176/');
 
 for (const [name, engine] of Object.entries({ chromium, firefox })) {
     const browser = await engine.launch();
@@ -37,10 +37,9 @@ for (const [name, engine] of Object.entries({ chromium, firefox })) {
             const roll = page.getByRole('button', { name: /^Roll(?: |$)/ });
             await roll.waitFor();
             await roll.click();
-            const result = language === 'go' ? page.locator('#output') : page.locator('.result-content .die-group');
+            const result = page.locator('.result-content .die-group');
             await result.waitFor();
-            if (language !== 'go') assert.match(await result.first().innerText(), /\d/);
-            else assert.match(await result.innerText(), /\d/);
+            assert.match(await result.first().innerText(), /\d/);
             await page.evaluate(async () => {
                 const ready = await navigator.serviceWorker.ready;
                 if (!navigator.serviceWorker.controller) {

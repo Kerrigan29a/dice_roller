@@ -1,0 +1,41 @@
+{
+  "elm": {
+    "dice": [
+      "1",
+      "1",
+      "6 + 2"
+    ],
+    "word": "Inspect Individual",
+    "icons": [
+      "heart shield",
+      "automatic sas",
+      "shattered glass"
+    ]
+  },
+  "gleam": {
+    "dice": [
+      "1",
+      "1",
+      "6 + 2"
+    ],
+    "word": "Inspect Business",
+    "icons": [
+      "back pain",
+      "tank tread",
+      "heart shield"
+    ]
+  },
+  "go": {
+    "dice": [
+      "4",
+      "5",
+      "1"
+    ],
+    "word": "Betray Mundane",
+    "icons": [
+      "fluffy trefoil",
+      "ostrich",
+      "crenulated shield"
+    ]
+  }
+}

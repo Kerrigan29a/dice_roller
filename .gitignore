@@ -14,3 +14,10 @@ test-results/
 __pycache__/
 *.py[co]
 .DS_Store
+
+# Generated from data/tables.json
+elm/generated/
+gleam/src/dice_roller/table_data.gleam
+go/internal/roller/tables.json
+go/internal/roller/version.go
+gleam/src/dice_roller/build_info.gleam

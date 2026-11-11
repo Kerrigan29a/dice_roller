@@ -1,0 +1,25 @@
+{{define "numeric"}}
+<div class="field numeric-field"><label for="{{.ID}}">{{.Label}}</label>
+{{if .Unit}}<div class="quantity-stepper"><button type="button" aria-label="Fewer {{.Unit}}" data-step="-1" data-field="{{.ID}}">−</button>{{end}}
+<input id="{{.ID}}" type="text" inputmode="numeric" autocomplete="off" value="{{.Value}}">
+{{if .Unit}}<button type="button" aria-label="More {{.Unit}}" data-step="1" data-field="{{.ID}}">+</button></div>{{end}}
+<p id="{{.ID}}-error" class="field-error" role="alert" hidden>Enter a positive whole number up to 2,147,483,647.</p></div>
+{{end}}
+<form class="tool-form">
+{{if eq .Prefs.Tool "dice"}}
+<div class="dice-controls"><fieldset><legend>Die type</legend><div class="presets">
+{{range presets}}<button type="button" data-preset="{{.}}" aria-pressed="{{preset . $.Prefs}}">d{{.}}</button>{{end}}
+<button type="button" data-action="custom" aria-pressed="{{.Prefs.Custom}}">Custom</button></div></fieldset>
+<div class="dice-fields">{{template "numeric" (field "dice-amount" "Dice count" .Prefs.Amount "dice")}}
+{{if .Prefs.Custom}}{{template "numeric" (field "dice-sides" "Sides" .Prefs.Sides "")}}{{end}}
+<label class="check-field"><input id="explode" type="checkbox" {{if .Prefs.Explode}}checked{{end}}>Exploding</label></div>
+<div class="result-options"><p id="dice-result-mode" class="field-label">Result</p><div class="result-modes" role="radiogroup" aria-labelledby="dice-result-mode">
+{{range modes}}<label class="result-option"><input type="radio" name="dice-result-mode" value="{{.}}" {{if eq . $.Prefs.Mode}}checked{{end}}><span>{{.Label}}</span></label>{{end}}
+</div></div></div>
+{{else if eq .Prefs.Tool "words"}}
+<div class="table-choice"><div><p class="muted">Mythic 2e table</p><strong>{{tableLabel .Prefs.Table}}</strong></div><button type="button" class="secondary" data-action="tables">Change table</button></div>
+{{else}}
+<div class="icon-controls">{{template "numeric" (field "icon-amount" "Pictogram count" .Prefs.IconAmount "pictograms")}}<div id="catalog-status"></div></div>
+{{end}}
+<button type="submit" class="primary" id="run-tool"></button>
+</form>
